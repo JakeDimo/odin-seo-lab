@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+**/__pycache__/
+*.pyc
+
+# Transient pipeline working files (regenerated every run) — keep the durable corpus only
+data/render/
+data/screenshots/
+data/html/
+data/results_batch_render.json
+data/urls_batch.json
+data/urls_to_render.json
+data/rank_only.json
+data/backfill_urls.json
+data/backfill_test.json
+data/backfill_test_render.json
+data/backfill_render.json
+data/analysis_snapshot.json
+data/serp_body.json
+data/serp_raw.json
+
+# Durable + committed: data/corpus/, data/corpus.jsonl, data/authority/, grades/

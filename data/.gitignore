@@ -1,0 +1,20 @@
+# Keep the lightweight results (JSON + grade markdown) in the vault.
+# Skip heavy / ephemeral scrape artefacts (raw HTML snapshots, rendered DOM, screenshots, temp bodies).
+# Cloud runs upload these as a downloadable workflow artifact instead.
+html/
+render/
+screenshots/
+serp_body.json
+serp_raw.json
+test_render.json
+urls_test_fresh.json
+# transient backfill working files (re-render of existing corpus; merged shard is what persists)
+backfill_urls.json
+backfill_test.json
+backfill_test_render.json
+backfill_render.json
+urls_batch.json
+results_batch_render.json
+analysis_snapshot.json
+urls_to_render.json
+rank_only.json
