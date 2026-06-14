@@ -24,6 +24,7 @@ Corpus: **23626** graded pages · authority-controlled band n = 67 top-3 / 153 c
 | Query front-loaded in title | **CONFOUND** | audit-verified | 6% | 5% | 67 | — |
 | Stat / $ density | **CONFOUND** | medium | 0.0 | 0 | 67 | — |
 | Word count / depth | **CONFOUND** | audit-verified | 49.5 | 116 | 67 | — |
+| Contextual (in-content) internal links | **NO DATA** | low | — | — | 0 | — |
 
 ## The playbook (confirmed leads first — these are what to test live)
 

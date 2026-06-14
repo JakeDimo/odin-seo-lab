@@ -38,6 +38,8 @@ VERIFIED = {
 FACTORS = [
     ("Internal links to the page", lambda r: r.get("internal_links"), "num", False,
      "Add internal links pointing at the target page from elsewhere on the site."),
+    ("Contextual (in-content) internal links", lambda r: r.get("main_internal_links"), "num", False,
+     "Add internal links from inside the body content (not nav/footer) — the evidence says contextual links carry the value, not raw count."),
     ("Topical breadth (keywords the page ranks for)", lambda r: r.get("ranked_keywords"), "num", False,
      "Build out the related cluster so the page covers the whole topic, not one term."),
     ("Word count / depth", lambda r: r.get("word_count"), "num", False, "Longer content."),
