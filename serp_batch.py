@@ -1,18 +1,26 @@
-"""Batch SERP step: loop keywords.json, pull AU winners + losers for each keyword,
-dedupe by URL across the whole batch, write ONE combined urls file for the render
-scraper. Label format: group|niche|keyword|rN  (group = win/lose).
+"""Batch SERP step: for each keyword in keywords.json, pull the AU SERP (winners + page-2
+near-miss + losers) and write one combined urls file for the render scraper. Label format:
+group|niche|keyword|rN (group = win/near/lose). Keeps EVERY (keyword, url, rank) pair (no
+cross-keyword dedup) so the keyword->URL graph survives.
+
+SERP calls are network-bound, so they run CONCURRENTLY via a thread pool (SERP_CONCURRENCY,
+default 10) instead of one-at-a-time — this is what takes a full pool from ~1 hour to ~5 min.
 
 Creds from env DATAFORSEO_B64, else the auth-memory file. Cloud egress handles the POST.
-
-Run: uv run --with requests serp_batch.py keywords.json data/urls_batch.json
+Run: uv run --with requests serp_batch.py keywords.json data/urls_batch.json [slices] [idx]
 """
 import sys, os, json, re, time
+from concurrent.futures import ThreadPoolExecutor
 import requests
 
 AUTH_FILE = (r"C:\Users\jaked\.claude\projects"
              r"\C--Users-jaked-Documents-Obsidian-obsidian-vault\memory\reference_dataforseo_api.md")
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+CONC = int(os.environ.get("SERP_CONCURRENCY", "10"))   # simultaneous SERP calls (DataForSEO allows ~30)
+FEATURES = {"featured_snippet", "people_also_ask", "local_pack", "ai_overview",
+            "knowledge_graph", "map", "related_searches", "shopping", "video",
+            "people_also_search", "faq", "discussions_and_forums", "twitter", "images"}
 
 
 def get_auth():
@@ -34,9 +42,8 @@ def fetch_serp(keyword, location, auth):
              "device": "desktop", "depth": 50}]
     hdr = {"Authorization": f"Basic {auth}", "Content-Type": "application/json",
            "Accept": "application/json", "User-Agent": UA}
-    # Auth/account errors are fatal (no point retrying the whole batch); everything
-    # else (transient 40502 "POST Data Is Empty", rate limits, network) is retried,
-    # then the keyword is SKIPPED rather than killing the run.
+    # Auth/account errors are fatal; everything else (transient 40502, rate limits, network)
+    # is retried, then the keyword is SKIPPED rather than killing the run.
     FATAL = {40100, 40101, 40102, 40103, 40104, 40200}
     for attempt in range(5):
         try:
@@ -62,6 +69,29 @@ def fetch_serp(keyword, location, auth):
             time.sleep(3)
 
 
+def process_keyword(q, auth):
+    """Pull + parse one keyword's SERP. Returns (url_records, cost, log_line). Independent,
+    so it is safe to run many of these in parallel threads."""
+    kw, niche, loc = q["keyword"], q.get("niche", "general"), q.get("location", "Australia")
+    items, cost = fetch_serp(kw, loc, auth)
+    feats = sorted({it.get("type") for it in items if it.get("type") in FEATURES})
+    org = [it for it in items if it.get("type") == "organic" and it.get("url") and it.get("rank_group")]
+    winners = [x for x in org if x["rank_group"] <= 10][:10]
+    near = [x for x in org if 11 <= x["rank_group"] <= 20][:5]
+    losers = [x for x in org if 21 <= x["rank_group"] <= 45][:6]
+    recs = []
+    for grp, lst in (("win", winners), ("near", near), ("lose", losers)):
+        for x in lst:
+            recs.append({"client": f"{grp}|{niche}|{kw}|r{x['rank_group']}", "url": x["url"],
+                         "serp_title": x.get("title"), "serp_snippet": x.get("description"),
+                         "serp_rank_absolute": x.get("rank_absolute"),
+                         "is_featured_snippet": bool(x.get("is_featured_snippet")),
+                         "serp_features": feats})
+    log = (f"{kw} ({niche}): {len(winners)}w/{len(near)}n/{len(losers)}l "
+           f"(+{len(recs)} rows)  feats={feats}  cost=${cost}")
+    return recs, cost, log
+
+
 def main():
     kw_file, out_file = sys.argv[1], sys.argv[2]
     auth = get_auth()
@@ -70,33 +100,13 @@ def main():
         slices, idx = int(sys.argv[3]), int(sys.argv[4])
         queue = [q for i, q in enumerate(queue) if i % slices == idx]
         print(f"slice {idx}/{slices}: {len(queue)} keywords this run")
-    # SERP features we record per keyword (returned in the call we already pay for).
-    FEATURES = {"featured_snippet", "people_also_ask", "local_pack", "ai_overview",
-                "knowledge_graph", "map", "related_searches", "shopping", "video",
-                "people_also_search", "faq", "discussions_and_forums", "twitter", "images"}
     urls, total = [], 0.0
-    # NO cross-keyword dedup: we keep every (keyword, url, rank) pair so the keyword->URL
-    # graph (breadth) is preserved. A URL ranking for many keywords gets many rows; the
-    # render step is what bears the cost, so this is free SERP data we'd otherwise discard.
-    for q in queue:
-        kw, niche, loc = q["keyword"], q.get("niche", "general"), q.get("location", "Australia")
-        items, cost = fetch_serp(kw, loc, auth)
-        total += cost
-        feats = sorted({it.get("type") for it in items if it.get("type") in FEATURES})
-        org = [it for it in items if it.get("type") == "organic" and it.get("url") and it.get("rank_group")]
-        winners = [x for x in org if x["rank_group"] <= 10][:10]
-        near = [x for x in org if 11 <= x["rank_group"] <= 20][:5]   # page-2 near-miss cohort
-        losers = [x for x in org if 21 <= x["rank_group"] <= 45][:6]
-        n = 0
-        for grp, lst in (("win", winners), ("near", near), ("lose", losers)):
-            for x in lst:
-                urls.append({"client": f"{grp}|{niche}|{kw}|r{x['rank_group']}", "url": x["url"],
-                             "serp_title": x.get("title"), "serp_snippet": x.get("description"),
-                             "serp_rank_absolute": x.get("rank_absolute"),
-                             "is_featured_snippet": bool(x.get("is_featured_snippet")),
-                             "serp_features": feats})
-                n += 1
-        print(f"{kw} ({niche}): {len(winners)}w/{len(near)}n/{len(losers)}l (+{n} rows)  feats={feats}  cost=${cost}")
+    print(f"pulling {len(queue)} SERPs at concurrency {CONC}...")
+    with ThreadPoolExecutor(max_workers=CONC) as ex:
+        for recs, cost, log in ex.map(lambda q: process_keyword(q, auth), queue):
+            urls.extend(recs)
+            total += cost
+            print(log)
     json.dump(urls, open(out_file, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
     print(f"\nTOTAL {len(urls)} ranking rows across {len(queue)} keywords. SERP cost ~${round(total, 4)}")
     print(f"WROTE {out_file}")
