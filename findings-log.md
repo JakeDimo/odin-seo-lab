@@ -2,7 +2,7 @@
 title: SEO Lab — findings log (how the answers evolve)
 type: log
 status: active
-updated: 2026-06-09
+updated: 2026-06-22
 ---
 
 # Findings log
@@ -28,6 +28,18 @@ A dated record of what each audit concluded, newest first. The point of this fil
 | Freshness (page age) | confound | ❌ confirmed null | ❌ null overall; thin mid-band/trades hint (-67d) — not promoted |
 | Core Web Vitals / speed | gate not lever | gate not lever (settled) | ❌ not even a gate here: top3 median LCP 7.3s, 97% of top3 fail "good" and rank anyway |
 | Authority within page 1 | flat (ticket, not sorter) | flat | 👀 revision candidate: top3 247 vs 4-10 174.5 refdomains — but only 6% coverage, recheck when enrichment compounds |
+
+---
+
+## 2026-06-22 — Weekly self-audit: corpus flat, no verdict change, pipeline looks stalled
+
+**Method:** scheduled weekly re-grade. `rulebook.py` + `analyze_controlled.py` + `analyze_movement.py` over the coalesced corpus (`data/corpus.jsonl` + `data/corpus/` shards, deduped by url+keyword).
+
+- **Corpus flat at 25,503 graded pages** (top3 4,137 / 4-10 10,173). Authority-controlled mid band unchanged at **337 top-3 / 1,045 challengers** — n grew by 0 this week. `rulebook.md` regenerated **byte-identical**, and the movement grade is byte-identical too (34,476 pairs / 22,501 seen on 2+ days). No new data has landed since the last pipeline commit on 2026-06-16 — the 8-hourly scrape workflow on the public repo looks stalled (worth a check of GitHub Actions).
+- **No verdict flipped, no new WATCH candidate.** Audit-verified leads hold: **internal links to the page** and **topical breadth**. Significant-but-not-yet-audited leads also hold (author/byline mid +16pt at n=337, freshness date mid +11pt, query in lead paragraph). Watch list unchanged: contextual in-content internal links (n=17), FAQ schema (flat), title 40-60 chars.
+- **No promotion-ready candidate.** None of the three WATCH factors clears the bar (mid-band top-3 n≥120 with a consistent same-direction gap): title 40-60 is the only one at n≥120 (337) but its mid-band gap reversed to -1pt this snapshot (raw +6pt) so direction is inconsistent; FAQ schema is dead flat (+1pt); contextual internal links is still tiny (n=17). Promotion stays blocked on data throughput, not analysis.
+- **Rank movement (unchanged):** 56% of 22,501 tracked pairs moved ≥1 position; top-3 sticky at 87% (3,691/4,221); 448 pairs broke into the top 3; biggest single-day rise +24 (Brisbane root-canal page r28→r4), biggest fall -23; all niches median |move| = 1.
+- **Binding constraint this week is pipeline uptime, not authority coverage.** The mid-authority band can't densify (still n≈337) while no new SERP runs are committing. Action for Jake: check why the scrape Action stopped after 2026-06-16.
 
 ---
 
